@@ -122,6 +122,11 @@ Backs up CouchDB, InfluxDB, MySQL/MariaDB, Microsoft SQL, MongoDB, Postgres, Red
 
 Clone this repository and build the image with `docker build <arguments> (imagename) .`
 
+The legacy `tiredofit/alpine` base image is no longer published. The base
+container framework that this image depends on (s6-overlay, `/assets`
+functions and init scripts) is vendored under `base/install` and installed by
+the Dockerfile, so the build is self-contained.
+
 ### Prebuilt Images
 
 Builds of the image are available on [Docker Hub](https://hub.docker.com/r/tiredofit/db-backup)

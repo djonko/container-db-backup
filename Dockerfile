@@ -1,10 +1,104 @@
 ARG DISTRO=alpine
-#ARG DISTRO_VARIANT=3.21-7.10.31
 ARG DISTRO_VARIANT=3.21
 
-#FROM docker.io/tiredofit/${DISTRO}:${DISTRO_VARIANT}
 FROM ${DISTRO}:${DISTRO_VARIANT}
 LABEL maintainer="Dave Conroy (github.com/tiredofit)"
+
+# The legacy tiredofit/alpine base image is no longer published. Recreate the
+# parts of it that this image relies on (s6-overlay, the /assets helper
+# functions and the container init framework) from the archived
+# github.com/tiredofit/docker-alpine sources vendored in base/install.
+ENV DEBUG_MODE=FALSE \
+    TIMEZONE=Etc/GMT \
+    CONTAINER_ENABLE_SCHEDULING=TRUE \
+    CONTAINER_SCHEDULING_BACKEND=cron \
+    CONTAINER_ENABLE_MESSAGING=TRUE \
+    CONTAINER_MESSAGING_BACKEND=msmtp \
+    CONTAINER_ENABLE_MONITORING=TRUE \
+    CONTAINER_MONITORING_BACKEND=zabbix \
+    CONTAINER_ENABLE_LOGSHIPPING=FALSE \
+    S6_GLOBAL_PATH=/command:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/local/sbin \
+    S6_KEEP_ENV=1 \
+    S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0
+
+RUN set -ex && \
+    apk update && \
+    apk upgrade && \
+    apk add --no-cache \
+                acl \
+                bash \
+                bc \
+                busybox-extras \
+                curl \
+                doas \
+                fail2ban \
+                gettext \
+                git \
+                grep \
+                iptables \
+                iputils \
+                jq \
+                less \
+                libgcc \
+                libssl3 \
+                logrotate \
+                msmtp \
+                nano \
+                pcre \
+                s6-overlay \
+                sudo \
+                tzdata \
+                yaml \
+                yq-go \
+                zabbix-agent2 \
+                zabbix-utils \
+                zstd \
+                && \
+    mv /usr/bin/envsubst /usr/local/bin/envsubst && \
+    cp -R /usr/share/zoneinfo/${TIMEZONE} /etc/localtime && \
+    echo "${TIMEZONE}" > /etc/timezone && \
+    echo "Set disable_coredump false" > /etc/sudo.conf && \
+    (addgroup -g 10050 zabbix 2>/dev/null || true) && \
+    (adduser -S -D -H -h /dev/null -s /sbin/nologin -G zabbix -u 10050 zabbix 2>/dev/null || true) && \
+    mkdir -p \
+            /etc/zabbix \
+            /etc/zabbix/zabbix_agentd.conf.d \
+            /var/lib/zabbix/enc \
+            /var/lib/zabbix/modules \
+            /var/lib/zabbix/run \
+            /var/log/zabbix \
+            && \
+    chown -R zabbix:root /etc/zabbix /var/lib/zabbix /var/log/zabbix && \
+    chmod -R 770 /var/lib/zabbix/run && \
+    (addgroup -g 65500 fail2ban 2>/dev/null || true) && \
+    (addgroup zabbix fail2ban 2>/dev/null || true) && \
+    rm -rf /var/run/fail2ban && \
+    mkdir -p /var/run/fail2ban && \
+    chown -R root:fail2ban /var/run/fail2ban && \
+    setfacl -d -m g:fail2ban:rwx /var/run/fail2ban && \
+    find /etc/fail2ban/action.d/ -type f -not -name 'iptables*.conf' -delete && \
+    rm -rf \
+            /etc/fail2ban/filter.d \
+            /etc/fail2ban/fail2ban.d \
+            /etc/fail2ban/jail.d/* \
+            /etc/fail2ban/paths* \
+            && \
+    mkdir -p \
+            /etc/fail2ban/filter.d \
+            /etc/logrotate.d \
+            /etc/doas.d \
+            && \
+    rm -rf \
+            /etc/logrotate.d/* \
+            /root/.cache \
+            /root/go \
+            /tmp/* \
+            /usr/src/* \
+            /var/cache/apk/*
+
+COPY base/install/ /
+
+SHELL ["/bin/bash", "-c"]
 
 ENV INFLUX1_CLIENT_VERSION=1.8.0 \
     INFLUX2_CLIENT_VERSION=2.7.5 \
@@ -246,3 +340,7 @@ RUN source /assets/functions/00-container && \
             /usr/src/*
 
 COPY install  /
+
+EXPOSE 2020/TCP 10050/TCP
+
+ENTRYPOINT ["/init"]
