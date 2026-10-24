@@ -311,7 +311,10 @@ RUN source /assets/functions/00-container && \
     go build -o /usr/sbin/influxd ./cmd/influxd && \
     strip /usr/sbin/influxd && \
     \
-    clone_git_repo "${MYSQL_REPO_URL}" "${MYSQL_VERSION}" && \
+    mkdir -p /usr/src/mysql_server && \
+    curl -sSL "${MYSQL_REPO_URL}/archive/refs/tags/${MYSQL_VERSION}.tar.gz" | tar xzf - --strip=1 -C /usr/src/mysql_server && \
+    cd /usr/src/mysql_server && \
+    test -f CMakeLists.txt && \
     cmake \
         -DCMAKE_BUILD_TYPE=MinSizeRel \
         -DCMAKE_INSTALL_PREFIX=/opt/mysql \
@@ -341,6 +344,6 @@ RUN source /assets/functions/00-container && \
 
 COPY install  /
 
-EXPOSE 2020/TCP 10050/TCP
+EXPOSE 2020/tcp 10050/tcp
 
 ENTRYPOINT ["/init"]
